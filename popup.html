@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>OdooDevTools</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=DM+Sans:wght@400;500;600&display=swap');
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #20243a;
+      --border: #2a2d3e;
+      --accent: #875bff;
+      --accent-dim: rgba(135,91,255,0.15);
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #f87171;
+      --blue: #38bdf8;
+      --blue-dim: rgba(56,189,248,0.12);
+      --purple: #a78bfa;
+      --purple-dim: rgba(167,139,250,0.12);
+      --text: #e2e4f0;
+      --muted: #6b7280;
+      --input-bg: #12141c;
+    }
+    body.light {
+      --bg: #f4f5f9;
+      --surface: #ffffff;
+      --surface2: #eef0f8;
+      --border: #d1d5e0;
+      --accent: #6d3dff;
+      --accent-dim: rgba(109,61,255,0.10);
+      --green: #16a34a;
+      --amber: #d97706;
+      --red: #dc2626;
+      --blue: #0284c7;
+      --blue-dim: rgba(2,132,199,0.10);
+      --purple: #7c3aed;
+      --purple-dim: rgba(124,58,237,0.10);
+      --text: #1a1d2e;
+      --muted: #6b7280;
+      --input-bg: #f0f1f7;
+    }
+
+    /* Modo cliente activo: banner ámbar sobre el body */
+    body.client-mode {
+      --bg: #1a1500;
+      --surface: #221c00;
+      --surface2: #2a2200;
+      --border: #3d3200;
+      --input-bg: #16120000;
+    }
+    body.client-mode.light {
+      --bg: #fffbeb;
+      --surface: #fef9c3;
+      --surface2: #fef08a;
+      --border: #fde047;
+      --input-bg: #fefce8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 360px; background: var(--bg); color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 13px;
+      overflow: hidden; transition: background .25s, color .25s;
+    }
+
+    /* ── Header ── */
+    .header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px 12px; border-bottom: 1px solid var(--border);
+      background: var(--surface); transition: background .25s, border-color .25s;
+    }
+    .header-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      background: var(--accent-dim); border: 1px solid var(--accent);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .header-text h1 { font-size: 13px; font-weight: 600; }
+    .header-text p  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+    .header-actions {
+      margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0;
+    }
+    .status-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--green); box-shadow: 0 0 6px var(--green);
+      transition: background .3s, box-shadow .3s;
+    }
+    .status-dot.inactive { background: var(--muted); box-shadow: none; }
+    .icon-btn {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      padding: 4px; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      transition: color .2s, background .2s;
+    }
+    .icon-btn:hover { color: var(--text); background: var(--surface2); }
+
+    /* ── Botón modo cliente ── */
+    .client-btn {
+      background: none; border: 1px solid var(--border);
+      color: var(--muted); cursor: pointer;
+      padding: 4px 8px; border-radius: 6px; gap: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'DM Sans', sans-serif; font-size: 10px; font-weight: 600;
+      transition: all .2s; white-space: nowrap;
+    }
+    .client-btn:hover { color: var(--text); border-color: var(--amber); }
+    .client-btn.active {
+      background: rgba(245,158,11,0.15);
+      border-color: var(--amber); color: var(--amber);
+    }
+
+    /* ── Banner modo cliente ── */
+    .client-banner {
+      display: none;
+      background: rgba(245,158,11,0.15);
+      border-bottom: 1px solid var(--amber);
+      padding: 6px 16px;
+      font-size: 11px; font-weight: 600; color: var(--amber);
+      align-items: center; gap: 6px;
+    }
+    .client-banner.visible { display: flex; }
+
+    /* Vistas */
+    .view { display: none; animation: fadeIn .15s ease; }
+    .view.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Body */
+    .body { padding: 14px 16px; }
+    .label {
+      font-size: 11px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px;
+    }
+    .label-domain { 
+      font-size: 11px; font-weight: 600; color: var(--text);
+      text-transform: uppercase; letter-spacing: .08em; margin-bottom: 8px;
+    }
+    .input-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    input[type="text"] {
+      flex: 1; background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 7px; padding: 7px 10px; color: var(--text);
+      font-family: 'JetBrains Mono', monospace; font-size: 12px;
+      outline: none; transition: border-color .2s, background .25s, color .25s;
+    }
+    input[type="text"]::placeholder { color: var(--muted); }
+    input[type="text"]:focus { border-color: var(--accent); }
+    button.add-btn {
+      background: var(--accent); color: #fff; border: none; border-radius: 7px;
+      padding: 7px 13px; font-family: 'DM Sans', sans-serif;
+      font-weight: 600; font-size: 12px; cursor: pointer; transition: opacity .2s; white-space: nowrap;
+    }
+    button.add-btn:hover { opacity: .85; }
+    .error-msg {
+      font-size: 11px; color: var(--red); margin-bottom: 6px; padding-left: 2px; min-height: 14px;
+    }
+
+    /* Domain list */
+    .domain-list {
+      display: flex; flex-direction: column; gap: 6px;
+      max-height: 200px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .domain-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 10px;
+      animation: slideIn .15s ease; transition: background .25s, border-color .25s;
+      display: flex; flex-direction: column; gap: 5px;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .domain-row-top { display: flex; align-items: center; gap: 8px; }
+    .domain-name {
+      flex: 1; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+    }
+    .remove-btn {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      padding: 2px; border-radius: 4px; flex-shrink: 0;
+      display: flex; align-items: center; transition: color .2s;
+    }
+    .remove-btn:hover { color: var(--red); }
+    .domain-row-mid, .domain-row-bot { display: flex; align-items: center; gap: 6px; }
+
+    /* Mode toggle */
+    .mode-toggle {
+      display: flex; background: var(--input-bg); border: 1px solid var(--border);
+      border-radius: 6px; overflow: hidden; flex-shrink: 0;
+      transition: background .25s, border-color .25s;
+    }
+    .mode-btn {
+      background: none; border: none; color: var(--muted);
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+      padding: 4px 8px; cursor: pointer;
+      transition: background .15s, color .15s; white-space: nowrap; line-height: 1;
+    }
+    .mode-btn:hover:not(.active) { color: var(--text); background: var(--border); }
+    .mode-btn[data-mode="1"].active     { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .mode-btn[data-mode="assets"].active{ background: rgba(245,158,11,0.15); color: var(--amber); }
+    .mode-btn:first-child { border-right: 1px solid var(--border); }
+
+    /* Select compartido */
+    .ctrl-select {
+      flex: 1; appearance: none; -webkit-appearance: none;
+      background: var(--input-bg); border: 1px solid var(--border); border-radius: 6px;
+      color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 11px;
+      padding: 4px 22px 4px 8px; cursor: pointer; outline: none;
+      transition: border-color .2s, background .25s, color .25s;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236b7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 7px center; min-width: 0;
+    }
+    .ctrl-select:focus { border-color: var(--accent); }
+    .ctrl-select option { background: var(--surface); color: var(--text); }
+
+    /* Empty */
+    .empty {
+      text-align: center; color: var(--muted); font-size: 12px; padding: 18px 0; line-height: 1.6;
+    }
+    .empty span { display: block; font-size: 22px; margin-bottom: 5px; }
+
+    /* ── Sección producto / modelo detectado ── */
+    .info-section {
+      margin: 10px 16px 0;
+      background: var(--surface); border: 1px solid var(--blue);
+      border-radius: 8px; padding: 9px 11px;
+      display: none; animation: fadeIn .2s ease;
+      transition: background .25s, border-color .25s;
+    }
+    .info-section.visible { display: block; }
+    .info-section + .info-section { margin-top: 6px; }
+
+    /* sección de modelo en verde */
+    .info-section.model-color { border-color: var(--purple); }
+
+    .info-header {
+      display: flex; align-items: center; gap: 7px; margin-bottom: 7px;
+    }
+    .info-header-icon {
+      width: 22px; height: 22px; border-radius: 5px;
+      background: var(--blue-dim); color: var(--blue);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .info-section.model-color .info-header-icon {
+      background: var(--purple-dim); color: var(--purple);
+    }
+    .info-header-text { flex: 1; }
+    .info-header-text strong { font-size: 11.5px; font-weight: 600; display: block; }
+    .info-header-text span   { font-size: 10.5px; color: var(--muted); }
+    .info-badge {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 600;
+      background: var(--blue-dim); color: var(--blue);
+      border: 1px solid var(--blue); border-radius: 5px; padding: 2px 7px; flex-shrink: 0;
+    }
+    .info-section.model-color .info-badge {
+      background: var(--purple-dim); color: var(--purple); border-color: var(--purple);
+    }
+    .info-open-btn {
+      width: 100%; background: var(--blue-dim); border: 1px solid var(--blue);
+      color: var(--blue); border-radius: 7px; padding: 6px 12px;
+      font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 11.5px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+      transition: opacity .2s;
+    }
+    .info-open-btn:hover { opacity: .75; }
+    .info-section.model-color .info-open-btn {
+      background: var(--purple-dim); border-color: var(--purple); color: var(--purple);
+    }
+
+    /* Footer */
+    .footer {
+      border-top: 1px solid var(--border); padding: 9px 16px;
+      font-size: 10.5px; color: var(--muted); background: var(--surface);
+      display: flex; align-items: center; gap: 6px; margin-top: 12px;
+      transition: background .25s, border-color .25s;
+    }
+
+    /* ════ AJUSTES ════ */
+    .settings-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px 12px; border-bottom: 1px solid var(--border);
+      background: var(--surface); transition: background .25s, border-color .25s;
+    }
+    .settings-header h2 { font-size: 13px; font-weight: 600; flex: 1; }
+    .settings-body { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+    .settings-section {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; transition: background .25s, border-color .25s;
+    }
+    .settings-section-title {
+      font-size: 10px; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .08em; padding: 8px 12px 6px;
+    }
+    .settings-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-top: 1px solid var(--border); transition: border-color .25s;
+    }
+    .settings-row:first-of-type { border-top: none; }
+    .settings-row-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .icon-purple { background: var(--accent-dim); color: var(--accent); }
+    .icon-green  { background: rgba(34,197,94,0.12); color: var(--green); }
+    .icon-amber  { background: rgba(245,158,11,0.12); color: var(--amber); }
+    .icon-blue   { background: var(--blue-dim); color: var(--blue); }
+    .settings-row-text { flex: 1; min-width: 0; }
+    .settings-row-text strong { display: block; font-size: 12px; font-weight: 600; }
+    .settings-row-text span   { display: block; font-size: 10.5px; color: var(--muted); margin-top: 1px; }
+
+    .switch { position: relative; width: 36px; height: 20px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .switch-track {
+      position: absolute; inset: 0; background: var(--border);
+      border-radius: 20px; cursor: pointer; transition: background .25s;
+    }
+    .switch-track::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 14px; height: 14px; border-radius: 50%; background: #fff;
+      transition: transform .25s; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+    }
+    .switch input:checked + .switch-track { background: var(--accent); }
+    .switch input:checked + .switch-track::after { transform: translateX(16px); }
+
+    .action-btn {
+      background: var(--accent-dim); border: 1px solid var(--accent); color: var(--accent);
+      border-radius: 7px; padding: 5px 11px; font-family: 'DM Sans', sans-serif;
+      font-weight: 600; font-size: 11px; cursor: pointer; transition: opacity .2s;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .action-btn:hover { opacity: .75; }
+    .action-btn.green-btn { background: rgba(34,197,94,0.12); border-color: var(--green); color: var(--green); }
+    .action-btn.amber-btn { background: rgba(245,158,11,0.12); border-color: var(--amber); color: var(--amber); }
+
+    .company-add-row {
+      display: flex; gap: 5px; padding: 8px 12px; border-top: 1px solid var(--border);
+    }
+    .company-add-row input[type="text"] {
+      font-family: 'DM Sans', sans-serif; font-size: 11px; padding: 5px 8px; border-radius: 6px;
+    }
+    .company-add-row input.cid-input { width: 60px; flex: none; }
+    .company-add-row input.name-input { flex: 1; }
+    .btn-sm {
+      background: var(--accent); color: #fff; border: none; border-radius: 6px;
+      padding: 5px 10px; font-family: 'DM Sans', sans-serif; font-weight: 600;
+      font-size: 11px; cursor: pointer; transition: opacity .2s; white-space: nowrap; flex-shrink: 0;
+    }
+    .btn-sm:hover { opacity: .85; }
+    .company-list { display: flex; flex-direction: column; }
+    .company-list-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 12px; border-top: 1px solid var(--border);
+    }
+    .company-cid {
+      font-family: 'JetBrains Mono', monospace; font-size: 10px; font-weight: 600;
+      background: var(--blue-dim); color: var(--blue); border-radius: 4px; padding: 2px 6px; flex-shrink: 0;
+    }
+    .company-name-text { flex: 1; font-size: 11.5px; color: var(--text); }
+    .company-error { font-size: 11px; color: var(--red); padding: 0 12px 6px; min-height: 14px; }
+
+    #importFile { display: none; }
+
+    .toast {
+      position: fixed; bottom: 12px; left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface); border: 1px solid var(--green); color: var(--green);
+      border-radius: 8px; padding: 7px 14px; font-size: 11.5px; font-weight: 600;
+      display: flex; align-items: center; gap: 6px;
+      opacity: 0; transition: opacity .25s, transform .25s;
+      pointer-events: none; white-space: nowrap; z-index: 99;
+      box-shadow: 0 4px 16px rgba(0,0,0,.3);
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* ── Abrir modelo personalizado ── */
+    /* ── Abrir modelo ── */
+    .model-input-section {
+      margin: 8px 16px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: background .25s, border-color .25s;
+    }
+    .model-input-section.hidden { display: none; }
+    .model-input-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 11px 6px;
+      border-bottom: 1px solid var(--border);
+    }
+    .model-input-header-icon {
+      width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0;
+      background: var(--purple-dim); color: var(--purple);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .model-input-header-text {
+      font-size: 11.5px; font-weight: 600; color: var(--text); flex: 1;
+    }
+    .model-input-header-sub {
+      font-size: 10.5px; color: var(--muted);
+    }
+    .model-input-body {
+      padding: 8px 11px 9px;
+      display: flex; gap: 6px; align-items: center;
+    }
+    .model-input-body input[type="text"] {
+      font-family: 'JetBrains Mono', monospace; font-size: 11px;
+      padding: 6px 9px; border-radius: 6px; flex: 1;
+    }
+    .model-input-body input[type="text"]:focus { border-color: var(--accent); }
+    .model-open-btn {
+      background: var(--accent); color: #fff;
+      border: none; border-radius: 6px; padding: 6px 13px;
+      font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 11.5px;
+      cursor: pointer; transition: opacity .2s; white-space: nowrap; flex-shrink: 0;
+    }
+    .model-open-btn:hover:not(:disabled) { opacity: .85; }
+    .model-open-btn:disabled { opacity: .45; cursor: wait; }
+    .model-error {
+      font-size: 10.5px; color: var(--red);
+      padding: 0 11px 7px; min-height: 0;
+    }
+
+
+    /* ── Módulos en actualización ── */
+    .modules-section {
+      margin: 8px 16px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px; overflow: hidden;
+      transition: background .25s, border-color .25s;
+    }
+    .modules-section.hidden { display: none; }
+    .modules-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 11px 6px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer; user-select: none;
+    }
+    .modules-header-icon {
+      width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0;
+      background: rgba(34,197,94,0.12); color: var(--green);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .modules-header-text { font-size: 11.5px; font-weight: 600; flex: 1; }
+    .modules-header-count {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px; font-weight: 600;
+      background: rgba(34,197,94,0.12); color: var(--green);
+      border: 1px solid var(--green); border-radius: 4px;
+      padding: 1px 6px; flex-shrink: 0;
+    }
+    .modules-header-count.warn {
+      background: rgba(245,158,11,0.12); color: var(--amber); border-color: var(--amber);
+    }
+    .modules-header-chevron {
+      color: var(--muted); flex-shrink: 0; transition: transform .2s;
+    }
+    .modules-section.open .modules-header-chevron { transform: rotate(180deg); }
+    .modules-body {
+      display: none; padding: 6px 11px 8px;
+      max-height: 160px; overflow-y: auto;
+      scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+    }
+    .modules-section.open .modules-body { display: block; }
+    .modules-loading {
+      font-size: 11px; color: var(--muted); padding: 4px 0;
+    }
+    .module-item {
+      display: flex; align-items: center; gap: 7px;
+      padding: 4px 0; border-bottom: 1px solid var(--border);
+      font-size: 11px;
+    }
+    .module-item:last-child { border-bottom: none; }
+    .module-badge {
+      font-family: 'JetBrains Mono', monospace; font-size: 9.5px; font-weight: 600;
+      border-radius: 4px; padding: 1px 5px; flex-shrink: 0; white-space: nowrap;
+    }
+    .badge-to_upgrade  { background: rgba(245,158,11,0.15); color: var(--amber); border: 1px solid var(--amber); }
+    .badge-to_install  { background: rgba(56,189,248,0.12); color: var(--blue);  border: 1px solid var(--blue); }
+    .badge-to_remove   { background: rgba(248,113,113,0.15); color: var(--red);  border: 1px solid var(--red); }
+    .badge-installed   { background: rgba(34,197,94,0.12); color: var(--green);  border: 1px solid var(--green); }
+    .module-name { flex: 1; color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 10.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .module-time { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+    .modules-refresh {
+      background: none; border: none; color: var(--muted); cursor: pointer;
+      padding: 2px; border-radius: 4px; display: flex; align-items: center;
+      transition: color .2s; flex-shrink: 0;
+    }
+    .modules-refresh:hover { color: var(--text); }
+
+    /* ── Portal section (verde) ── */
+    .info-section.portal-color { border-color: var(--green); }
+    .info-section.portal-color .info-header-icon {
+      background: rgba(34,197,94,0.12); color: var(--green);
+    }
+    .info-section.portal-color .info-badge {
+      background: rgba(34,197,94,0.12); color: var(--green); border-color: var(--green);
+    }
+    .info-section.portal-color .info-open-btn {
+      background: rgba(34,197,94,0.12); border-color: var(--green); color: var(--green);
+    }
+
+    /* ── Info de BD por dominio ── */
+    .domain-info {
+      display: flex; align-items: center; gap: 6px;
+      padding: 3px 0 1px;
+      border-top: 1px solid var(--border);
+      margin-top: 1px;
+    }
+    .domain-db {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 9.5px; color: var(--muted);
+      display: flex; align-items: center; gap: 3px; flex: 1;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .domain-db svg { flex-shrink: 0; }
+    .domain-expiry {
+      font-size: 9.5px; border-radius: 4px; padding: 1px 5px;
+      font-family: 'JetBrains Mono', monospace; flex-shrink: 0;
+    }
+    .domain-expiry.ok      { background: rgba(34,197,94,0.12);  color: var(--green); }
+    .domain-expiry.warn    { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .domain-expiry.expired { background: rgba(248,113,113,0.15); color: var(--red); }
+    .domain-expiry.none    { color: var(--muted); }
+  </style>
+</head>
+<body>
+
+  <!-- ══ VISTA PRINCIPAL ══ -->
+  <div id="viewMain" class="view active">
+    <div class="header">
+      <div class="header-icon">
+        <img src="icon128.png" alt="" width="30" height="30" />
+      </div>
+      <div class="header-text">
+        <h1>OdooDevTools</h1>
+        <p>Configura los parámetros para cada dominio.</p>
+      </div>
+      <div class="header-actions">
+        <div class="status-dot inactive" id="statusDot"></div>
+        <!-- Toggle modo cliente -->
+        <button class="client-btn" id="clientModeBtn">
+          <!-- ícono y texto se actualizan dinámicamente -->
+          <span id="clientModeIcon">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </span>
+          <span id="clientModeLabel">Cliente</span>
+        </button>
+        <button class="icon-btn" id="settingsBtn" title="Ajustes">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Banner modo cliente -->
+    <div class="client-banner" id="clientBanner">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+      </svg>
+      Modo cliente activo — sin debug, idioma ni empresa
+    </div>
+
+    <div class="body">
+      <div class="label-domain">Dominios Odoo</div>
+      <div class="input-row">
+        <input type="text" id="domainInput" placeholder="mi-empresa.odoo.com" autocomplete="off" spellcheck="false"/>
+        <button class="add-btn" id="addBtn">Añadir</button>
+      </div>
+      <div class="error-msg" id="errorMsg"></div>
+      <div class="domain-list" id="domainList"></div>
+    </div>
+
+    <!-- Sección producto detectado (tienda web) -->
+    <div class="info-section" id="productSection">
+      <div class="info-header">
+        <div class="info-header-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
+            <line x1="3" y1="6" x2="21" y2="6"/>
+            <path d="M16 10a4 4 0 0 1-8 0"/>
+          </svg>
+        </div>
+        <div class="info-header-text">
+          <strong>Producto detectado</strong>
+          <span>Estás viendo un producto de la tienda web</span>
+        </div>
+        <div class="info-badge" id="productIdBadge">#—</div>
+      </div>
+      <button class="info-open-btn" id="productOpenBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+        Abrir plantilla de producto
+      </button>
+    </div>
+
+
+
+    <!-- Sección registro portal detectado -->
+    <div class="info-section portal-color" id="portalSection">
+      <div class="info-header">
+        <div class="info-header-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <div class="info-header-text">
+          <strong id="portalRecordTitle">Registro del portal</strong>
+          <span id="portalRecordName">Cargando…</span>
+        </div>
+        <div class="info-badge" id="portalIdBadge">#—</div>
+      </div>
+      <button class="info-open-btn" id="portalOpenBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+        Abrir en Odoo
+      </button>
+    </div>
+
+    <!-- Panel de módulos -->
+    <div class="modules-section hidden" id="modulesSection">
+      <div class="modules-header" id="modulesHeader">
+        <div class="modules-header-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="16 3 21 3 21 8"/>
+            <line x1="4" y1="20" x2="21" y2="3"/>
+            <polyline points="21 16 21 21 16 21"/>
+            <line x1="15" y1="15" x2="21" y2="21"/>
+          </svg>
+        </div>
+        <span class="modules-header-text">Estado módulos</span>
+        <span class="modules-header-count" id="modulesCount">…</span>
+        <button class="modules-refresh" id="modulesRefresh" title="Actualizar">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
+        <svg class="modules-header-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      <div class="modules-body" id="modulesBody">
+        <div class="modules-loading">Cargando…</div>
+      </div>
+    </div>
+
+    <!-- Abrir modelo personalizado -->
+    <div class="model-input-section" id="modelInputSection">
+      <div class="model-input-header">
+        <div class="model-input-header-icon">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <ellipse cx="12" cy="5" rx="9" ry="3"/>
+            <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+            <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+          </svg>
+        </div>
+        <span class="model-input-header-text">Abrir vista modelo</span>
+      </div>
+      <div class="model-input-body">
+        <input type="text" id="modelInput" placeholder="sale.order, res.partner…" autocomplete="off" spellcheck="false"/>
+        <button class="model-open-btn" id="modelOpenBtn">Abrir</button>
+      </div>
+      <div class="model-error" id="modelError"></div>
+    </div>
+
+
+  </div>
+
+  <!-- ══ VISTA AJUSTES ══ -->
+  <div id="viewSettings" class="view">
+    <div class="settings-header">
+      <button class="icon-btn" id="backBtn" title="Volver">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <h2>Ajustes</h2>
+    </div>
+
+    <div class="settings-body">
+
+      <div class="settings-section">
+        <div class="settings-section-title">Modo de visualización</div>
+        <div class="settings-row">
+          <div class="settings-row-icon icon-purple">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"/>
+              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+            </svg>
+          </div>
+          <div class="settings-row-text">
+            <strong>Cambiar tema</strong>
+            <span>Cambiar entre modo claro y oscuro</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="themeSwitch"/>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+
+      <!-- Módulos en actualización -->
+      <div class="settings-section">
+        <div class="settings-section-title">Panel de módulos</div>
+        <div class="settings-row">
+          <div class="settings-row-icon icon-green">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 3 21 3 21 8"/>
+              <line x1="4" y1="20" x2="21" y2="3"/>
+              <polyline points="21 16 21 21 16 21"/>
+              <line x1="15" y1="15" x2="21" y2="21"/>
+            </svg>
+          </div>
+          <div class="settings-row-text">
+            <strong>Mostrar estado módulos</strong>
+            <span>Muestra el estado de los módulos pendientes o actualizados recientemente</span>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="modulesSwitch"/>
+            <span class="switch-track"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Idiomas (lang)</div>
+        <div class="settings-row" style="padding-bottom:6px;">
+          <div class="settings-row-icon icon-purple">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="2" y1="12" x2="22" y2="12"/>
+              <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </div>
+          <div class="settings-row-text">
+            <strong>Gestionar idiomas</strong>
+            <span>Añade los idiomas de tus instancias Odoo</span>
+          </div>
+        </div>
+        <div class="company-error" id="langError"></div>
+        <div class="company-list" id="langList"></div>
+        <div class="company-add-row">
+          <input type="text" class="name-input" id="langNameInput" placeholder="Nombre idioma" autocomplete="off" spellcheck="false"/>
+          <input type="text" class="cid-input" id="langCodeInput" placeholder="es_ES" autocomplete="off" spellcheck="false"/>
+          <button class="btn-sm" id="langAddBtn">Añadir</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Empresas (cids)</div>
+        <div class="settings-row" style="padding-bottom:6px;">
+          <div class="settings-row-icon icon-blue">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+          </div>
+          <div class="settings-row-text">
+            <strong>Gestionar empresas</strong>
+            <span>Añade las empresas de dominios Odoo</span>
+          </div>
+        </div>
+        <div class="company-error" id="companyError"></div>
+        <div class="company-list" id="companyList"></div>
+        <div class="company-add-row">
+          <input type="text" class="name-input" id="companyNameInput" placeholder="Nombre empresa" autocomplete="off" spellcheck="false"/>
+          <input type="text" class="cid-input" id="companyCidInput" placeholder="cid" autocomplete="off"/>
+          <button class="btn-sm" id="companyAddBtn">Añadir</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Exportar configuración</div>
+        <div class="settings-row">
+          <div class="settings-row-icon icon-green">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div class="settings-row-text">
+            <strong>Exportar dominios</strong>
+            <span>Descarga un .json con toda tu configuración</span>
+          </div>
+          <button class="action-btn green-btn" id="exportBtn">Exportar</button>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section-title">Importar configuración</div>
+        <div class="settings-row">
+          <div class="settings-row-icon icon-amber">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
+          <div class="settings-row-text">
+            <strong>Importar dominios</strong>
+            <span>Carga un .json exportado previamente</span>
+          </div>
+          <button class="action-btn amber-btn" id="importBtn">Importar</button>
+          <input type="file" id="importFile" accept=".json"/>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="20 6 9 17 4 12"/>
+    </svg>
+    <span id="toastMsg"></span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
