@@ -1,4 +1,4 @@
-# OdooDevTools — Chrome Extension for Odoo 17 Developers
+# OdooDevTools — Extension chrome para desarrolladores Odoo 17
 
 > Herramienta de desarrollo para Odoo 17. Gestiona parámetros de URL, accede al backend desde la web del portal, abre cualquier modelo y monitoriza módulos — todo desde el popup del navegador.
 
