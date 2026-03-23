@@ -56,7 +56,7 @@
 ## 🚀 Instalación
 
 1. Descarga o clona este repositorio
-2. Descomprimir
+2. Descomprimir el ZIP
 3. Abre Chrome → `chrome://extensions`
 4. Activa **Modo desarrollador** (esquina superior derecha)
 5. Pulsa **Cargar descomprimida** y selecciona la carpeta del proyecto
