@@ -181,10 +181,23 @@ function cleanDomain(value) {
     .replace(/\/$/, "");
 }
 function isValidDomain(domain) {
-  const dnsPattern   = /^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?(\.[a-z]{2,})+$/;
-  const ipPattern    = /^(\d{1,3}\.){3}\d{1,3}(:\d{1,5})?$/;
-  const localPattern = /^localhost(:\d{1,5})?$/;
-  return dnsPattern.test(domain) || ipPattern.test(domain) || localPattern.test(domain);
+  // Separar host y puerto si lo hay
+  const portMatch = domain.match(/^(.+):(\d{1,5})$/);
+  const host = portMatch ? portMatch[1] : domain;
+  const port = portMatch ? parseInt(portMatch[2]) : null;
+
+  // Puerto válido si existe: 1-65535
+  if (port !== null && (port < 1 || port > 65535)) return false;
+
+  // IP: 192.168.1.10
+  const ipPattern    = /^(\d{1,3}\.){3}\d{1,3}$/;
+  // Localhost
+  const localPattern = /^localhost$/;
+  // DNS: cualquier hostname válido con o sin TLD
+  // Acepta: mi-empresa.odoo.com, srvdockerdev.miweb.com, odoo.local, servidor
+  const dnsPattern   = /^[a-z0-9]([a-z0-9\-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9\-]*[a-z0-9])?)*$/;
+
+  return ipPattern.test(host) || localPattern.test(host) || dnsPattern.test(host);
 }
 function setError(msg) { errorMsg.textContent = msg; }
 function clearError()  { errorMsg.textContent = ""; }
