@@ -1,5 +1,12 @@
 // popup.js - OdooDevTools
 
+/* ── Versión de la extensión ─────────────────────────
+   Editar esta constante antes de cada commit/push.
+   Formato: "X.Y"  (ej: "1.0", "1.1", "2.0")
+   Se muestra como badge en el header de Ajustes.
+──────────────────────────────────────────────────── */
+const APP_VERSION = "1.1";
+
 /* ══════════════════════════════════════
    Hash fragment helpers
 ══════════════════════════════════════ */
@@ -100,6 +107,8 @@ settingsBtn.addEventListener("click", () => {
   renderCompanies();
   renderLangs();
   getShowModules((show) => { modulesSwitch.checked = show; });
+  const badge = document.getElementById("appVersionBadge");
+  if (badge) badge.textContent = "v" + APP_VERSION;
 });
 backBtn.addEventListener("click", () => {
   viewSettings.classList.remove("active");
@@ -935,11 +944,13 @@ domainList.addEventListener("change", (e) => {
    Exportar
 ══════════════════════════════════════ */
 exportBtn.addEventListener("click", () => {
-  chrome.storage.sync.get({ domains: [], companies: [], langs: [], theme: "dark" }, (data) => {
+  chrome.storage.sync.get({ domains: [], companies: [], langs: [], theme: "dark", showModules: false }, (data) => {
     const payload = {
       version: 3, exportedAt: new Date().toISOString(),
+      appVersion: APP_VERSION,
       theme: data.theme, companies: data.companies,
       langs: data.langs, domains: data.domains,
+      showModules: data.showModules,
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url  = URL.createObjectURL(blob);
@@ -963,13 +974,15 @@ importFile.addEventListener("change", () => {
     try {
       const data      = JSON.parse(ev.target.result);
       if (!data || typeof data !== "object") throw new Error();
-      const domains   = Array.isArray(data.domains)   ? data.domains   : [];
-      const companies = Array.isArray(data.companies) ? data.companies : [];
-      const langs     = Array.isArray(data.langs)     ? data.langs     : [];
-      const theme     = data.theme === "light" ? "light" : "dark";
-      chrome.storage.sync.set({ domains, companies, langs, theme }, () => {
+      const domains     = Array.isArray(data.domains)   ? data.domains   : [];
+      const companies   = Array.isArray(data.companies) ? data.companies : [];
+      const langs       = Array.isArray(data.langs)     ? data.langs     : [];
+      const theme       = data.theme === "light" ? "light" : "dark";
+      const showModules = typeof data.showModules === "boolean" ? data.showModules : false;
+      chrome.storage.sync.set({ domains, companies, langs, theme, showModules }, () => {
         themeSwitch.checked = theme === "light";
         applyTheme(theme === "light");
+        applyModulesVisibility(showModules);
         render(domains, companies, langs);
         domains.forEach((entry) => syncActiveTab(entry));
         showToast("✓ Configuración importada correctamente");
