@@ -1,12 +1,19 @@
 {
   "manifest_version": 3,
   "name": "OdooDevTools",
-  "version": "1.0",
+  "version": "1.2",
   "description": "Configua los parámetros que necesites para cada dominio Odoo.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "odoodevtools@odoodevtools",
+      "strict_min_version": "121.0"
+    }
+  },
   "permissions": ["storage", "webNavigation", "tabs"],
   "host_permissions": ["<all_urls>"],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
   "action": {
     "default_popup": "popup.html",

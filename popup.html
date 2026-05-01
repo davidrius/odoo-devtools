@@ -63,7 +63,7 @@
     body {
       width: 360px; background: var(--bg); color: var(--text);
       font-family: 'DM Sans', sans-serif; font-size: 13px;
-      overflow: hidden; transition: background .25s, color .25s;
+      overflow-x: hidden; transition: background .25s, color .25s;
     }
 
     /* ── Header ── */
@@ -363,8 +363,6 @@
     }
     .company-name-text { flex: 1; font-size: 11.5px; color: var(--text); }
     .company-error { font-size: 11px; color: var(--red); padding: 0 12px 6px; min-height: 14px; }
-
-    #importFile { display: none; }
 
     .toast {
       position: fixed; bottom: 12px; left: 50%;
@@ -807,22 +805,22 @@
         </div>
       </div>
 
-      <div class="settings-section">
-        <div class="settings-section-title">Importar configuración</div>
-        <div class="settings-row">
-          <div class="settings-row-icon icon-amber">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
+        <div class="settings-section">
+          <div class="settings-section-title">Importar configuración</div>
+          <div class="settings-row">
+            <div class="settings-row-icon icon-amber">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </div>
+            <div class="settings-row-text">
+              <strong>Importar configuración</strong>
+              <span>Selecciona un archivo .json exportado</span>
+            </div>
+            <button class="action-btn amber-btn" id="importBtn">Importar</button>
           </div>
-          <div class="settings-row-text">
-            <strong>Importar dominios</strong>
-            <span>Carga un .json exportado previamente</span>
-          </div>
-          <button class="action-btn amber-btn" id="importBtn">Importar</button>
-          <input type="file" id="importFile" accept=".json"/>
         </div>
       </div>
 
@@ -834,6 +832,50 @@
       <polyline points="20 6 9 17 4 12"/>
     </svg>
     <span id="toastMsg"></span>
+  </div>
+
+  <!-- ====== MODO IMPORTACIÓN (se muestra solo si se abre con #import) ====== -->
+  <div id="importModeView" style="display:none;">
+    <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; padding:20px; box-sizing:border-box;">
+      <div style="width:100%; max-width:340px; background:var(--card); border-radius:14px; padding:24px; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+
+        <!-- Cabecera -->
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+          <div style="width:34px; height:34px; border-radius:8px; background:linear-gradient(135deg,#7c3aed,#a855f7); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <img src="icon128.png" style="width:37px; height:37px; border-radius:8px; flex-shrink:0;"/>
+          </div>
+          <div>
+            <div style="font-size:13px; font-weight:700; color:var(--text);">Importar configuración</div>
+            <div style="font-size:11px; color:var(--text-muted);">OdooDevTools</div>
+          </div>
+        </div>
+
+        <div style="height:1px; background:var(--border); margin:16px 0;"></div>
+
+        <!-- Zona drop / selección -->
+        <div id="importDropZone" style="border:2px dashed var(--border); border-radius:10px; padding:22px 16px; text-align:center; cursor:pointer; transition:border-color .15s, background .15s; margin-bottom:14px;">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:8px;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="12"/>
+            <line x1="15" y1="15" x2="12" y2="12"/>
+          </svg>
+          <div style="font-size:12px; font-weight:600; color:var(--text); margin-bottom:3px;">Selecciona el archivo .json</div>
+          <div id="importFileName" style="font-size:11px; color:var(--text-muted);">Exportado previamente con OdooDevTools</div>
+        </div>
+        <input type="file" id="importFileInput" accept=".json" style="display:none"/>
+
+        <!-- Mensaje de estado -->
+        <div id="importStatusText" style="font-size:12px; text-align:center; min-height:16px; margin-bottom:14px; border-radius:6px; padding:6px 0; display:none;"></div>
+
+        <!-- Botón -->
+        <button id="importSelectBtn" style="width:100%; padding:10px; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; transition:opacity .15s;">
+          Seleccionar archivo
+        </button>
+
+      </div>
+    </div>
   </div>
 
   <script src="popup.js"></script>

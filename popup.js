@@ -5,7 +5,7 @@
    Formato: "X.Y"  (ej: "1.0", "1.1", "2.0")
    Se muestra como badge en el header de Ajustes.
 ──────────────────────────────────────────────────── */
-const APP_VERSION = "1.1";
+const APP_VERSION = "1.2";
 
 /* ══════════════════════════════════════
    Hash fragment helpers
@@ -38,6 +38,10 @@ function deleteHashParam(url, key) {
     u.hash = rebuildHash(params);
     return u.toString();
   } catch { return url; }
+}
+
+function isFirefox() {
+  return typeof browser !== 'undefined' && navigator.userAgent.includes('Firefox');
 }
 
 /* ══════════════════════════════════════
@@ -75,8 +79,6 @@ const viewSettings   = document.getElementById("viewSettings");
 
 const themeSwitch       = document.getElementById("themeSwitch");
 const exportBtn         = document.getElementById("exportBtn");
-const importBtn         = document.getElementById("importBtn");
-const importFile        = document.getElementById("importFile");
 const companyNameInput  = document.getElementById("companyNameInput");
 const companyCidInput   = document.getElementById("companyCidInput");
 const companyAddBtn     = document.getElementById("companyAddBtn");
@@ -97,6 +99,144 @@ const modulesBody     = document.getElementById("modulesBody");
 const modulesCount    = document.getElementById("modulesCount");
 const modulesRefresh  = document.getElementById("modulesRefresh");
 const modulesSwitch   = document.getElementById("modulesSwitch");
+
+/* ══════════════════════════════════════
+   IMPORTACIÓN (compatible Chrome + Firefox)
+══════════════════════════════════════ */
+const importBtn = document.getElementById('importBtn');
+
+// Detectar si estamos en la mini ventana de importación (Firefox)
+const IMPORT_MODE = (window.location.hash === '#import');
+
+if (IMPORT_MODE) {
+  // Estamos en la ventana emergente para Firefox → ocultar vistas normales y mostrar selector
+  document.getElementById('viewMain').style.display = 'none';
+  document.getElementById('viewSettings').style.display = 'none';
+
+  const importModeView   = document.getElementById('importModeView');
+  importModeView.style.display = 'block';
+
+  const importFileInput  = document.getElementById('importFileInput');
+  const importSelectBtn  = document.getElementById('importSelectBtn');
+  const importStatusText = document.getElementById('importStatusText');
+  const importDropZone   = document.getElementById('importDropZone');
+  const importFileName   = document.getElementById('importFileName');
+
+  // Leer y guardar el JSON
+  function processFile(file) {
+    if (!file) return;
+    importFileName.textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data || typeof data !== 'object') throw new Error();
+
+        const domains     = Array.isArray(data.domains)   ? data.domains   : [];
+        const companies   = Array.isArray(data.companies) ? data.companies : [];
+        const langs       = Array.isArray(data.langs)     ? data.langs     : [];
+        const theme       = data.theme === 'light' ? 'light' : 'dark';
+        const showModules = typeof data.showModules === 'boolean' ? data.showModules : false;
+
+        chrome.storage.sync.set({ domains, companies, langs, theme, showModules }, () => {
+          importDropZone.style.borderColor = '#22c55e';
+          importDropZone.style.background  = 'rgba(34,197,94,0.08)';
+          importStatusText.style.display   = 'block';
+          importStatusText.textContent     = '✓ Importado correctamente. Cerrando...';
+          importStatusText.style.color     = '#22c55e';
+          importStatusText.style.background = 'rgba(34,197,94,0.08)';
+          importSelectBtn.style.opacity    = '0.5';
+          importSelectBtn.disabled         = true;
+          setTimeout(() => window.close(), 1200);
+        });
+      } catch {
+        importDropZone.style.borderColor  = '#ef4444';
+        importDropZone.style.background   = 'rgba(239,68,68,0.08)';
+        importStatusText.style.display    = 'block';
+        importStatusText.textContent      = '✗ Archivo no válido. Comprueba que es un .json de OdooDevTools.';
+        importStatusText.style.color      = '#ef4444';
+        importStatusText.style.background = 'rgba(239,68,68,0.08)';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // Click en la zona o en el botón
+  importDropZone.addEventListener('click', () => importFileInput.click());
+  importSelectBtn.addEventListener('click', () => importFileInput.click());
+  importFileInput.addEventListener('change', () => processFile(importFileInput.files[0]));
+
+  // Drag & drop
+  importDropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    importDropZone.style.borderColor = '#7c3aed';
+    importDropZone.style.background  = 'rgba(124,58,237,0.08)';
+  });
+  importDropZone.addEventListener('dragleave', () => {
+    importDropZone.style.borderColor = '';
+    importDropZone.style.background  = '';
+  });
+  importDropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    importDropZone.style.borderColor = '';
+    importDropZone.style.background  = '';
+    processFile(e.dataTransfer.files[0]);
+  });
+} else {
+  // Popup normal → comportamiento según navegador
+  if (isFirefox()) {
+    // Firefox: abrir ventana emergente en modo importación
+    importBtn.addEventListener('click', () => {
+      chrome.windows.create({
+        url: chrome.runtime.getURL('popup.html') + '#import',
+        type: 'popup',
+        width: 420,
+        height: 340,
+        focused: true
+      });
+    });
+  } else {
+    // Chrome / Edge / Opera, etc.: diálogo de archivo directo desde el popup
+    const hiddenFileInput = document.createElement('input');
+    hiddenFileInput.type = 'file';
+    hiddenFileInput.accept = '.json';
+    hiddenFileInput.style.display = 'none';
+    document.body.appendChild(hiddenFileInput);
+
+    hiddenFileInput.addEventListener('change', () => {
+      const file = hiddenFileInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (!data || typeof data !== 'object') throw new Error();
+
+          const domains     = Array.isArray(data.domains)   ? data.domains   : [];
+          const companies   = Array.isArray(data.companies) ? data.companies : [];
+          const langs       = Array.isArray(data.langs)     ? data.langs     : [];
+          const theme       = data.theme === 'light' ? 'light' : 'dark';
+          const showModules = typeof data.showModules === 'boolean' ? data.showModules : false;
+
+          chrome.storage.sync.set({ domains, companies, langs, theme, showModules }, () => {
+            themeSwitch.checked = theme === 'light';
+            applyTheme(theme === 'light');
+            applyModulesVisibility(showModules);
+            getDomains((entries) => getCompanies((companies) => getLangs((langs) => render(entries, companies, langs))));
+            showToast('✓ Configuración importada correctamente');
+          });
+        } catch {
+          showToast('✗ Error al leer el archivo');
+        }
+        hiddenFileInput.value = '';
+      };
+      reader.readAsText(file);
+    });
+
+    importBtn.addEventListener('click', () => hiddenFileInput.click());
+  }
+}
+
 
 /* ══════════════════════════════════════
    Navegación vistas
@@ -961,39 +1101,6 @@ exportBtn.addEventListener("click", () => {
   });
 });
 
-/* ══════════════════════════════════════
-   Importar
-══════════════════════════════════════ */
-importBtn.addEventListener("click", () => importFile.click());
-
-importFile.addEventListener("change", () => {
-  const file = importFile.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data      = JSON.parse(ev.target.result);
-      if (!data || typeof data !== "object") throw new Error();
-      const domains     = Array.isArray(data.domains)   ? data.domains   : [];
-      const companies   = Array.isArray(data.companies) ? data.companies : [];
-      const langs       = Array.isArray(data.langs)     ? data.langs     : [];
-      const theme       = data.theme === "light" ? "light" : "dark";
-      const showModules = typeof data.showModules === "boolean" ? data.showModules : false;
-      chrome.storage.sync.set({ domains, companies, langs, theme, showModules }, () => {
-        themeSwitch.checked = theme === "light";
-        applyTheme(theme === "light");
-        applyModulesVisibility(showModules);
-        render(domains, companies, langs);
-        domains.forEach((entry) => syncActiveTab(entry));
-        showToast("✓ Configuración importada correctamente");
-      });
-    } catch {
-      showToast("✗ Error al leer el archivo");
-    }
-    importFile.value = "";
-  };
-  reader.readAsText(file);
-});
 
 /* ══════════════════════════════════════
    Panel de módulos

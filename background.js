@@ -140,6 +140,10 @@ async function updateBadge(tabId, url) {
   let debugVal = null;
   try { debugVal = new URL(url).searchParams.get("debug"); } catch {}
 
+  const setBadgeTextColor = chrome.action.setBadgeTextColor
+      ? (opts) => chrome.action.setBadgeTextColor(opts)
+      : () => {};
+
   if (debugVal === "1") {
     chrome.action.setBadgeText({ text: "1", tabId });
     chrome.action.setBadgeBackgroundColor({ color: "#22c55e", tabId });
