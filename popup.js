@@ -5,7 +5,7 @@
    Formato: "X.Y"  (ej: "1.0", "1.1", "2.0")
    Se muestra como badge en el header de Ajustes.
 ──────────────────────────────────────────────────── */
-const APP_VERSION = "1.2";
+const APP_VERSION = "1.3";
 
 /* ══════════════════════════════════════
    Hash fragment helpers

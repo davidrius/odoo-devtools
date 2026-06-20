@@ -179,12 +179,39 @@ chrome.storage.onChanged.addListener(async (changes) => {
 });
 
 /* ══════════════════════════════════════
+   Detección de POST — evita redirigir durante
+   todo el flujo POST → 302 → página final,
+   preservando mensajes flash del servidor
+══════════════════════════════════════ */
+const postTabs = new Set();
+
+chrome.webRequest.onBeforeRequest.addListener(
+  (details) => {
+    if (details.type === "main_frame" && details.method === "POST") {
+      postTabs.add(details.tabId);
+    }
+  },
+  { urls: ["<all_urls>"] }
+);
+
+chrome.webNavigation.onCompleted.addListener((details) => {
+  if (details.frameId === 0) postTabs.delete(details.tabId);
+});
+
+chrome.webNavigation.onErrorOccurred.addListener((details) => {
+  if (details.frameId === 0) postTabs.delete(details.tabId);
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => postTabs.delete(tabId));
+
+/* ══════════════════════════════════════
    Navegación — respeta modo cliente
 ══════════════════════════════════════ */
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
   if (details.frameId !== 0) return;
   const { domains, clientMode } = await getStorage();
   if (clientMode) return; // no interceptar en modo cliente
+  if (postTabs.has(details.tabId)) return;
   const debugUrl = getDebugUrl(details.url, domains);
   if (debugUrl) chrome.tabs.update(details.tabId, { url: debugUrl });
 });
@@ -197,6 +224,7 @@ chrome.webNavigation.onCommitted.addListener(async (details) => {
   if (!qualifies) return;
   const { domains, clientMode } = await getStorage();
   if (clientMode) return; // no interceptar en modo cliente
+  if (postTabs.has(details.tabId)) return;
   const debugUrl = getDebugUrl(details.url, domains);
   if (debugUrl) chrome.tabs.update(details.tabId, { url: debugUrl });
 });
