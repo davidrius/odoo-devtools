@@ -5,7 +5,7 @@
    Formato: "X.Y"  (ej: "1.0", "1.1", "2.0")
    Se muestra como badge en el header de Ajustes.
 ──────────────────────────────────────────────────── */
-const APP_VERSION = "1.3";
+const APP_VERSION = "1.4";
 
 /* ══════════════════════════════════════
    Hash fragment helpers
@@ -1171,8 +1171,8 @@ async function loadModules() {
   modulesBody.innerHTML    = `<div class="modules-loading">Cargando…</div>`;
 
   try {
-    // Calcular hace 2 horas en UTC formato Odoo: "2024-01-15 10:00:00"
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
+    // Calcular hace 8 horas en UTC formato Odoo: "2024-01-15 10:00:00"
+    const cutoffDate = new Date(Date.now() - 8 * 60 * 60 * 1000)
       .toISOString().replace("T", " ").substring(0, 19);
 
     // Llamada paralela: pendientes + recién actualizados
@@ -1204,7 +1204,7 @@ async function loadModules() {
           jsonrpc: "2.0", method: "call", id: 2,
           params: {
             model: "ir.module.module", method: "search_read",
-            args: [[["state", "=", "installed"], ["write_date", ">=", twoHoursAgo]]],
+            args: [[["state", "=", "installed"], ["write_date", ">=", cutoffDate]]],
             kwargs: {
               fields: ["name", "shortdesc", "state", "write_date"],
               order:  "write_date desc",

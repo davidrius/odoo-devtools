@@ -6,8 +6,8 @@
 
 **Extensión de navegador pensada para desarrolladores Odoo que necesitan agilizar su flujo de trabajo diario. Automatiza la gestión de parámetros de URL, facilita el acceso al backend desde cualquier página del portal y permite explorar modelos y módulos directamente desde el popup.**
 
-[![Version](https://img.shields.io/badge/version-1.2-blue?style=flat-square)](https://github.com/davidrius/odoo-devtools)
-[![License](https://img.shields.io/badge/license-GPL--3.0-green?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.4-blue?style=flat-square)](https://github.com/davidrius/odoo-devtools)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Chrome](https://img.shields.io/badge/Chrome-109%2B-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](https://github.com/davidrius/odoo-devtools)
 [![Firefox](https://img.shields.io/badge/Firefox-121%2B-FF7139?style=flat-square&logo=firefox&logoColor=white)](https://github.com/davidrius/odoo-devtools)
 [![Manifest](https://img.shields.io/badge/Manifest-V3-yellow?style=flat-square)](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
@@ -30,6 +30,7 @@
 - [Uso rápido](#-uso-rápido)
 - [Permisos](#-permisos)
 - [Tecnología](#-tecnología)
+- [Soporte](#-soporte)
 - [Licencia](#-licencia)
 
 ---
@@ -53,7 +54,7 @@ Al acceder a registros del portal como `/my/orders/303639` o `/my/invoices/30363
 Escribe el nombre técnico de cualquier modelo de Odoo (`stock.lot`, `res.partner`, `account.move`...) y la extensión creará un `ir.actions.act_window` temporal, navegará directamente a la vista del modelo y eliminará la acción automáticamente después. Acceso instantáneo a cualquier modelo sin tocar el menú de Odoo.
 
 ### 📦 Panel de módulos
-Un vistazo rápido al estado de tus módulos: cuáles están pendientes de actualizar, instalar o eliminar, y cuáles se han instalado o actualizado en las últimas 2 horas. Ideal para comprobar si un despliegue se aplicó correctamente. Este panel es opcional y se puede activar o desactivar desde los ajustes.
+Un vistazo rápido al estado de tus módulos: cuáles están pendientes de actualizar, instalar o eliminar, y cuáles se han instalado o actualizado en las últimas 8 horas. Ideal para comprobar si un despliegue se aplicó correctamente. Este panel es opcional y se puede activar o desactivar desde los ajustes.
 
 ### 🏢 Gestión de empresas e idiomas
 Centraliza la gestión de tus empresas e idiomas. Define cada empresa con su identificador `cids` y cada idioma con su código, y asígnalos a los dominios que necesites. Al cambiar de empresa, la extensión utiliza el mecanismo nativo de Odoo (`_company_switching`) para garantizar una transición limpia.
@@ -123,10 +124,10 @@ La extensión muestra un pequeño indicador sobre su icono en la barra del naveg
 
 ---
 
+## 🙋 Soporte
+
+**Errores o sugerencias:** [Abrir un issue](https://github.com/davidrius/odoo-devtools/issues)
+
 ## 📄 Licencia
 
-Copyright (c) 2024-2025 David Rius
-
-Este proyecto está protegido bajo la licencia [GNU General Public License v3.0](LICENSE).
-
-Se permite el uso, modificación y distribución del software siempre que cualquier trabajo derivado se distribuya bajo la misma licencia y su código fuente sea público.
+Licencia MIT - consulte el archivo [LICENSE](LICENSE) para obtener más detalles.
