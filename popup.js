@@ -648,7 +648,12 @@ function updateDetectionSections(tab, entries) {
    {"type": "ir.actions.act_window", "res_model": name, "view_mode": "tree,form"}
    Crea el action al vuelo via create(), navega a él, luego lo borra. */
 async function openModel() {
-  const model  = modelInput.value.trim();
+  // Normaliza: minúsculas siempre; si no hay puntos (estilo tabla, p.ej.
+  // "sale_order"), convierte los guiones bajos en puntos. Si ya hay puntos
+  // se respetan los guiones bajos (p.ej. "ir.actions.act_window").
+  let model = modelInput.value.trim().toLowerCase();
+  if (model && !model.includes(".")) model = model.replace(/_/g, ".");
+  modelInput.value = model;
   if (!model) { modelInput.focus(); return; }
   const origin = modelInputSection.dataset.origin;
   const mode   = modelInputSection.dataset.mode || "1";
