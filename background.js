@@ -51,6 +51,27 @@ async function getStorage() {
   });
 }
 
+/* Odoo 19 guarda las compañías activas en la cookie "cids". A diferencia
+   de Odoo 14-18, no refleja ese estado en la URL /odoo/... . */
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg.type !== "setOdoo19Companies") return;
+
+  chrome.cookies.set({
+    url: `${msg.origin}/`,
+    name: "cids",
+    value: String(msg.cids),
+    path: "/",
+    expirationDate: Math.floor(Date.now() / 1000) + (60 * 60 * 24 * 30),
+  }, () => {
+    if (chrome.runtime.lastError) {
+      sendResponse({ ok: false, error: chrome.runtime.lastError.message });
+    } else {
+      sendResponse({ ok: true });
+    }
+  });
+  return true;
+});
+
 /* ══════════════════════════════════════
    Matching
 ══════════════════════════════════════ */
@@ -74,8 +95,16 @@ function isLoginPage(url) {
 
 function isCompanySwitching(url) {
   try {
-    return parseHash(url)["_company_switching"] === "1";
+    const parsed = new URL(url);
+    return parseHash(url)["_company_switching"] === "1" || parsed.searchParams.get("_company_switching") === "1";
   } catch { return false; }
+}
+
+/* Rutas del backend (/web... y /odoo...): ahí un ?lang= suelto provoca
+   "Invalid language code", así que se elimina. */
+function isBackendPath(pathname) {
+  return pathname === "/web" || pathname.startsWith("/web/") ||
+         pathname === "/odoo" || pathname.startsWith("/odoo/");
 }
 
 function alreadyUpToDate(url, entry) {
@@ -83,8 +112,11 @@ function alreadyUpToDate(url, entry) {
     const searchParams = new URL(url).searchParams;
     const hashParams   = parseHash(url);
     const debugOk = searchParams.get("debug") === (entry.mode || "1");
-    const langOk  = !entry.lang || searchParams.get("lang") === entry.lang;
-    const cidsOk  = !entry.cid  || hashParams["cids"] === String(entry.cid);
+    const isOdoo19 = new URL(url).pathname === "/odoo" || new URL(url).pathname.startsWith("/odoo/");
+    // En Odoo 19 la empresa activa está en la cookie "cids", no en la URL.
+    const cidsOk  = isOdoo19 || !entry.cid || hashParams["cids"] === String(entry.cid);
+    const u = new URL(url);
+    const langOk = !(isBackendPath(u.pathname) && searchParams.has("lang"));
     return debugOk && langOk && cidsOk;
   } catch { return false; }
 }
@@ -93,10 +125,11 @@ function buildDebugUrl(url, entry) {
   let result = url;
   const u = new URL(result);
   u.searchParams.set("debug", entry.mode || "1");
-  if (entry.lang) u.searchParams.set("lang", entry.lang);
-  else            u.searchParams.delete("lang");
+  if (isBackendPath(u.pathname)) u.searchParams.delete("lang");
   result = u.toString();
-  if (entry.cid) result = setHashParam(result, "cids", String(entry.cid));
+  if (entry.cid && !(u.pathname === "/odoo" || u.pathname.startsWith("/odoo/"))) {
+    result = setHashParam(result, "cids", String(entry.cid));
+  }
   return result;
 }
 

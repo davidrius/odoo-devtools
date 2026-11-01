@@ -5,7 +5,7 @@
    Formato: "X.Y"  (ej: "1.0", "1.1", "2.0")
    Se muestra como badge en el header de Ajustes.
 ──────────────────────────────────────────────────── */
-const APP_VERSION = "1.4";
+const APP_VERSION = "1.5";
 
 /* ══════════════════════════════════════
    Hash fragment helpers
@@ -42,6 +42,63 @@ function deleteHashParam(url, key) {
 
 function isFirefox() {
   return typeof browser !== 'undefined' && navigator.userAgent.includes('Firefox');
+}
+
+/* ── Rutas del backend: Odoo 14-18 vs. Odoo 19 ───────────────
+   Hasta Odoo 18 las acciones viven en el hash de /web. En Odoo 19
+   pasan a ser rutas /odoo/<path>; cuando una acción no tiene "path"
+   (como las temporales que crea esta extensión), Odoo usa action-ID. */
+const odooMajorVersionCache = new Map();
+
+async function fetchSessionInfo(origin) {
+  try {
+    const response = await fetch(`${origin}/web/session/get_session_info`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ jsonrpc: "2.0", method: "call", id: 1, params: {} })
+    });
+    const data = await response.json();
+    return data?.result || null;
+  } catch { return null; }
+}
+
+async function getOdooMajorVersion(origin) {
+  if (odooMajorVersionCache.has(origin)) return odooMajorVersionCache.get(origin);
+  const info = await fetchSessionInfo(origin);
+  const version = info?.server_version_info?.[0]
+    ?? Number.parseInt(info?.server_version, 10);
+  if (!Number.isFinite(version)) return null; // no cachear fallos
+  odooMajorVersionCache.set(origin, version);
+  return version;
+}
+
+function setOdoo19Companies(origin, cids) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage({ type: "setOdoo19Companies", origin, cids }, (result) => {
+      if (chrome.runtime.lastError || !result?.ok) {
+        reject(new Error(result?.error || chrome.runtime.lastError?.message || "No se pudo guardar la empresa"));
+      } else {
+        resolve();
+      }
+    });
+  });
+}
+
+function buildActionUrl(origin, actionId, { mode = "1", lang = "", cids = "", recordId = null, viewType = "list", majorVersion = null } = {}) {
+  if (majorVersion >= 19) {
+    const path = `/odoo/action-${actionId}${recordId ? `/${recordId}` : ""}`;
+    const params = new URLSearchParams({ debug: mode, view_type: viewType });
+    if (lang) params.set("lang", lang);
+    return `${origin}${path}?${params.toString()}`;
+  }
+
+  const params = new URLSearchParams({ debug: mode });
+  if (lang) params.set("lang", lang);
+  let hash = `action=${actionId}&view_type=${viewType}`;
+  if (recordId) hash = `id=${recordId}&${hash}`;
+  if (cids) hash += `&cids=${encodeURIComponent(cids)}`;
+  return `${origin}/web?${params.toString()}#${hash}`;
 }
 
 /* ══════════════════════════════════════
@@ -260,11 +317,13 @@ backBtn.addEventListener("click", () => {
    Toast
 ══════════════════════════════════════ */
 let toastTimer = null;
-function showToast(msg) {
-  toastMsg.textContent = msg;
+function showToast(msg, isError = false) {
+  toastMsg.textContent = msg.length > 160 ? msg.slice(0, 157) + "…" : msg;
+  toast.title = msg;
+  toast.classList.toggle("error", isError);
   toast.classList.add("show");
   if (toastTimer) clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove("show"), 2800);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), isError ? 6000 : 2800);
 }
 
 /* ══════════════════════════════════════
@@ -404,6 +463,7 @@ function stripParamsFromTab(entries) {
 
     parsed.searchParams.delete("debug");
     parsed.searchParams.delete("lang");
+    parsed.searchParams.delete("cids");
     let newUrl = deleteHashParam(parsed.toString(), "cids");
     chrome.tabs.update(tab.id, { url: newUrl });
   });
@@ -447,7 +507,6 @@ clientModeBtn.addEventListener("click", () => {
 ══════════════════════════════════════ */
 function syncActiveTab(entry) {
   const mode = entry.mode || "1";
-  const lang = entry.lang || "es_ES";
 
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (!tabs || !tabs.length) return;
@@ -458,11 +517,9 @@ function syncActiveTab(entry) {
     if (!domainMatches(entry, parsed)) return;
 
     const debugOk = parsed.searchParams.get("debug") === mode;
-    const langOk  = parsed.searchParams.get("lang") === lang;
-    if (debugOk && langOk) return;
+    if (debugOk) return;
 
     parsed.searchParams.set("debug", mode);
-    parsed.searchParams.set("lang", lang);
     chrome.tabs.update(tab.id, { url: parsed.toString() });
   });
 }
@@ -479,24 +536,81 @@ function switchCompanyOnTab(entry, newCid) {
     const mode = entry.mode || "1";
     parsed.searchParams.set("debug", mode);
     const cid = newCid || "1";
-    const switchUrl = `${parsed.origin}/web?${parsed.searchParams.toString()}#action=menu&cids=${cid}&_company_switching=1`;
-    chrome.tabs.update(tab.id, { url: switchUrl });
+    const isOdoo19 = parsed.pathname === "/odoo" || parsed.pathname.startsWith("/odoo/");
+    if (isOdoo19) {
+      chrome.runtime.sendMessage({
+        type: "setOdoo19Companies",
+        origin: parsed.origin,
+        cids: cid,
+      }, (result) => {
+        if (chrome.runtime.lastError || !result?.ok) {
+          showToast("No se pudo cambiar la empresa en Odoo 19", true);
+          return;
+        }
+        chrome.tabs.reload(tab.id);
+      });
+    } else {
+      const switchUrl = `${parsed.origin}/web?${parsed.searchParams.toString()}#action=menu&cids=${cid}&_company_switching=1`;
+      chrome.tabs.update(tab.id, { url: switchUrl });
+    }
   });
 }
 
-function switchLangOnTab(entry, newLang) {
-  const effectiveLang = newLang || "es_ES";
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    if (!tabs || !tabs.length) return;
-    const tab = tabs[0];
-    if (!tab.url || !tab.url.startsWith("http")) return;
-    let parsed;
-    try { parsed = new URL(tab.url); } catch { return; }
-    if (!domainMatches(entry, parsed)) return;
+/* El idioma NO se pasa por URL (?lang= provoca "Invalid language code"
+   si el idioma no está instalado y Odoo 17+ lo ignora). Se cambia el
+   idioma del usuario por RPC. "" = idioma original del usuario, que se
+   guarda en entry.origLang la primera vez que se cambia. */
+async function switchLangOnTab(entry, newLang) {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.url || !tab.url.startsWith("http")) return;
+  let parsed;
+  try { parsed = new URL(tab.url); } catch { return; }
+  if (!domainMatches(entry, parsed)) return;
+
+  // Siempre se limpia ?lang= de la URL (puede venir de un intento anterior inválido)
+  const navigate = () => {
     parsed.searchParams.set("debug", entry.mode || "1");
-    parsed.searchParams.set("lang", effectiveLang);
+    parsed.searchParams.delete("lang");
     chrome.tabs.update(tab.id, { url: parsed.toString() });
-  });
+  };
+
+  const info    = await fetchSessionInfo(parsed.origin);
+  const uid     = info?.uid;
+  const current = info?.user_context?.lang;
+  if (!uid) { showToast("No se pudo leer la sesión de Odoo", true); navigate(); return; }
+
+  let target = newLang;
+  if (!newLang) {
+    target = entry.origLang;           // restaurar idioma original del usuario
+    if (!target) { navigate(); return; }
+  } else if (!entry.origLang && current) {
+    await new Promise((res) => getDomains((entries) => {
+      saveDomains(entries.map((en) => en.domain === entry.domain ? { ...en, origLang: current } : en), res);
+    }));
+  }
+  if (target === current) { navigate(); return; }
+
+  try {
+    const resp = await fetch(`${parsed.origin}/web/dataset/call_kw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        jsonrpc: "2.0", method: "call", id: 1,
+        params: { model: "res.users", method: "write", args: [[uid], { lang: target }], kwargs: {} }
+      })
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.data?.message || data.error.message);
+  } catch (err) {
+    showToast(`No se pudo cambiar idioma: ${err.message}`, true);
+    navigate();
+    return;
+  }
+  if (!newLang) {
+    getDomains((entries) => saveDomains(entries.map((en) => en.domain === entry.domain ? { ...en, origLang: "" } : en)));
+  }
+  navigate();
 }
 
 function removeDebugFromTab(entry) {
@@ -509,6 +623,7 @@ function removeDebugFromTab(entry) {
     if (!domainMatches(entry, parsed)) return;
     parsed.searchParams.delete("debug");
     parsed.searchParams.delete("lang");
+    parsed.searchParams.delete("cids");
     let newUrl = deleteHashParam(parsed.toString(), "cids");
     chrome.tabs.update(tab.id, { url: newUrl });
   });
@@ -558,14 +673,14 @@ async function fetchRecordName(origin, model, id) {
         jsonrpc: "2.0", method: "call", id: 1,
         params: {
           model,
-          method: "name_get",
-          args:   [[parseInt(id)]],
+          method: "read",
+          args:   [[parseInt(id)], ["display_name"]],
           kwargs: { context: {} }
         }
       })
     });
     const data = await resp.json();
-    if (data.result && data.result.length) return data.result[0][1];
+    if (data.result && data.result.length) return data.result[0].display_name;
     return null;
   } catch { return null; }
 }
@@ -576,6 +691,50 @@ function getProductIdFromUrl(url) {
     const match    = pathname.match(/^\/shop\/.*-(\d+)\/?$/);
     return match ? match[1] : null;
   } catch { return null; }
+}
+
+async function openModelInTab(tabId, { origin, model, mode = "1", lang = "", cids = "", recordId = null }) {
+  const majorVersion = await getOdooMajorVersion(origin);
+  if (majorVersion >= 19 && cids) {
+    try { await setOdoo19Companies(origin, cids); }
+    catch (error) { console.warn("OdooDevTools: no se pudo aplicar la empresa", error); }
+  }
+  const rpc = async (params) => {
+    const response = await fetch(`${origin}/web/dataset/call_kw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ jsonrpc: "2.0", method: "call", id: 1, params })
+    });
+    return response.json();
+  };
+
+  const createData = await rpc({
+    model: "ir.actions.act_window",
+    method: "create",
+    args: [{
+      name: model,
+      res_model: model,
+      view_mode: recordId ? "form" : (majorVersion >= 19 ? "list,form" : "tree,form"),
+      target: "current",
+      domain: "[]",
+    }],
+    kwargs: { context: {} }
+  });
+
+  if (createData.error || !createData.result) {
+    throw new Error(createData.error?.data?.message || "sin permisos");
+  }
+
+  const actionId = createData.result;
+  const url = buildActionUrl(origin, actionId, {
+    mode, cids, recordId,
+    viewType: recordId ? "form" : "list",
+    majorVersion,
+  });
+
+  chrome.tabs.update(tabId, { url });
+  chrome.runtime.sendMessage({ type: "unlinkAction", origin, actionId });
 }
 
 /* ══════════════════════════════════════
@@ -603,9 +762,20 @@ function updateDetectionSections(tab, entries) {
   // ── Producto tienda ──
   const productId = getProductIdFromUrl(tab.url);
   if (entry && productId) {
-    const backendUrl = `${parsed.origin}/web?debug=${mode}#id=${productId}&model=product.template&view_type=form`;
     productIdBadge.textContent = `#${productId}`;
-    productOpenBtn.onclick = () => chrome.tabs.update(tab.id, { url: backendUrl });
+    productOpenBtn.onclick = async () => {
+      try {
+        await openModelInTab(tab.id, {
+          origin: parsed.origin, model: "product.template", mode,
+          lang: parsed.searchParams.get("lang") || entry.lang || "",
+          cids: parsed.searchParams.get("cids") || parseHash(tab.url)["cids"] || entry.cid || "",
+          recordId: productId,
+        });
+      } catch (error) {
+        console.error("OdooDevTools: no se pudo abrir el producto", error);
+        showModelError("No se pudo abrir el producto: " + (error.message || "error desconocido"));
+      }
+    };
     productSection.classList.add("visible");
   } else {
     productSection.classList.remove("visible");
@@ -614,11 +784,22 @@ function updateDetectionSections(tab, entries) {
   // ── Registro portal ──
   const portalRecord = getPortalRecord(tab.url);
   if (entry && portalRecord) {
-    const backendUrl = `${parsed.origin}/web?debug=${mode}#id=${portalRecord.id}&model=${encodeURIComponent(portalRecord.model)}&view_type=form`;
     portalIdBadge.textContent     = `#${portalRecord.id}`;
     portalRecordTitle.textContent = portalRecord.label;
     portalRecordName.textContent  = "Cargando nombre…";
-    portalOpenBtn.onclick = () => chrome.tabs.update(tab.id, { url: backendUrl });
+    portalOpenBtn.onclick = async () => {
+      try {
+        await openModelInTab(tab.id, {
+          origin: parsed.origin, model: portalRecord.model, mode,
+          lang: parsed.searchParams.get("lang") || entry.lang || "",
+          cids: parsed.searchParams.get("cids") || parseHash(tab.url)["cids"] || entry.cid || "",
+          recordId: portalRecord.id,
+        });
+      } catch (error) {
+        console.error("OdooDevTools: no se pudo abrir el registro", error);
+        showModelError("No se pudo abrir el registro: " + (error.message || "error desconocido"));
+      }
+    };
     portalSection.classList.add("visible");
     // Cargar el nombre real del registro via call_kw en background
     fetchRecordName(parsed.origin, portalRecord.model, portalRecord.id).then((name) => {
@@ -633,7 +814,8 @@ function updateDetectionSections(tab, entries) {
     modelInputSection.classList.remove("hidden");
     modelInputSection.dataset.origin = parsed.origin;
     modelInputSection.dataset.mode   = mode;
-    const currentCids = parseHash(tab.url)["cids"] || entry.cid || "";
+    modelInputSection.dataset.lang   = parsed.searchParams.get("lang") || entry.lang || "";
+    const currentCids = parsed.searchParams.get("cids") || parseHash(tab.url)["cids"] || entry.cid || "";
     modelInputSection.dataset.cids = currentCids;
     // Propagar origen al panel de módulos
     modulesSection.dataset.origin = parsed.origin;
@@ -658,6 +840,7 @@ async function openModel() {
   const origin = modelInputSection.dataset.origin;
   const mode   = modelInputSection.dataset.mode || "1";
   const cids   = modelInputSection.dataset.cids || "";
+  const lang   = modelInputSection.dataset.lang || "";
   if (!origin) return;
 
   modelOpenBtn.textContent = "…";
@@ -674,6 +857,11 @@ async function openModel() {
   }
 
   try {
+    const majorVersion = await getOdooMajorVersion(origin);
+    if (majorVersion >= 19 && cids) {
+      try { await setOdoo19Companies(origin, cids); }
+      catch (error) { console.warn("OdooDevTools: no se pudo aplicar la empresa", error); }
+    }
     // 1. Crear el action exactamente igual que el server action Python
     const createData = await rpc({
       model:  "ir.actions.act_window",
@@ -681,7 +869,7 @@ async function openModel() {
       args: [{
         name:      model,
         res_model: model,
-        view_mode: "tree,form",
+        view_mode: majorVersion >= 19 ? "list,form" : "tree,form",
         target:    "current",
         domain:    "[]",
       }],
@@ -696,9 +884,13 @@ async function openModel() {
     const actionId = createData.result;
 
     // 2. Navegar al action recién creado
-    let hash = `action=${actionId}&view_type=list`;
-    if (cids) hash += `&cids=${cids}`;
-    const url = `${origin}/web?debug=${mode}#${hash}`;
+    const url = buildActionUrl(origin, actionId, {
+      mode,
+      lang,
+      cids,
+      viewType: "list",
+      majorVersion,
+    });
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs && tabs.length) chrome.tabs.update(tabs[0].id, { url });

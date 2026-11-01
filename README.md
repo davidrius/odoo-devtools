@@ -6,7 +6,7 @@
 
 **Extensión de navegador pensada para desarrolladores Odoo que necesitan agilizar su flujo de trabajo diario. Automatiza la gestión de parámetros de URL, facilita el acceso al backend desde cualquier página del portal y permite explorar modelos y módulos directamente desde el popup.**
 
-[![Version](https://img.shields.io/badge/version-1.4-blue?style=flat-square)](https://github.com/davidrius/odoo-devtools)
+[![Version](https://img.shields.io/badge/version-1.5-blue?style=flat-square)](https://github.com/davidrius/odoo-devtools)
 [![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
 [![Chrome](https://img.shields.io/badge/Chrome-109%2B-4285F4?style=flat-square&logo=googlechrome&logoColor=white)](https://github.com/davidrius/odoo-devtools)
 [![Firefox](https://img.shields.io/badge/Firefox-121%2B-FF7139?style=flat-square&logo=firefox&logoColor=white)](https://github.com/davidrius/odoo-devtools)
