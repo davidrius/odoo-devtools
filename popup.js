@@ -49,11 +49,12 @@ function isFirefox() {
   return typeof browser !== 'undefined' && navigator.userAgent.includes('Firefox');
 }
 
-/* ── Rutas del backend: Odoo 14-18 vs. Odoo 19 ───────────────
-   Hasta Odoo 18 las acciones viven en el hash de /web. En Odoo 19
-   pasan a ser rutas /odoo/<path>; cuando una acción no tiene "path"
-   (como las temporales que crea esta extensión), Odoo usa action-ID. */
-const odooMajorVersionCache = new Map();
+/* ── Rutas del backend: router antiguo vs. nuevo ──────────────
+   Odoo ≤17: las acciones viven en el hash de /web (#action=...).
+   Odoo nuevo: rutas /odoo/<path>; cuando una acción no tiene "path"
+   (como las temporales que crea esta extensión), Odoo usa action-ID.
+   No se usa el número de versión: se detecta por comportamiento. */
+const odooRouterCache = new Map();
 
 async function fetchSessionInfo(origin) {
   try {
@@ -68,14 +69,35 @@ async function fetchSessionInfo(origin) {
   } catch { return null; }
 }
 
-async function getOdooMajorVersion(origin) {
-  if (odooMajorVersionCache.has(origin)) return odooMajorVersionCache.get(origin);
-  const info = await fetchSessionInfo(origin);
-  const version = info?.server_version_info?.[0]
-    ?? Number.parseInt(info?.server_version, 10);
-  if (!Number.isFinite(version)) return null; // no cachear fallos
-  odooMajorVersionCache.set(origin, version);
-  return version;
+/* true si el servidor sirve el backend en /odoo (router nuevo).
+   En el router antiguo /odoo no existe y devuelve 404. */
+async function usesOdooRouter(origin) {
+  if (odooRouterCache.has(origin)) return odooRouterCache.get(origin);
+  try {
+    const response = await fetch(`${origin}/odoo`, { credentials: "include" });
+    const path = new URL(response.url).pathname;
+    const isNew = response.status === 200 && !path.startsWith("/web/login");
+    odooRouterCache.set(origin, isNew);
+    return isNew;
+  } catch { return false; }
+}
+
+/* Crea el act_window temporal probando "list" y "tree" en el orden más
+   probable; el nombre de la vista de lista cambió entre versiones. */
+async function createTempAction(rpc, { model, recordId, router }) {
+  const modes = recordId ? ["form"]
+    : router ? ["list,form", "tree,form"] : ["tree,form", "list,form"];
+  let last = null;
+  for (const view_mode of modes) {
+    last = await rpc({
+      model: "ir.actions.act_window",
+      method: "create",
+      args: [{ name: model, res_model: model, view_mode, target: "current", domain: "[]" }],
+      kwargs: { context: {} }
+    });
+    if (!last.error && last.result) return last;
+  }
+  return last;
 }
 
 function setOdoo19Companies(origin, cids) {
@@ -90,8 +112,8 @@ function setOdoo19Companies(origin, cids) {
   });
 }
 
-function buildActionUrl(origin, actionId, { mode = "1", lang = "", cids = "", recordId = null, viewType = "list", majorVersion = null } = {}) {
-  if (majorVersion >= 19) {
+function buildActionUrl(origin, actionId, { mode = "1", lang = "", cids = "", recordId = null, viewType = "list", router = false } = {}) {
+  if (router) {
     const path = `/odoo/action-${actionId}${recordId ? `/${recordId}` : ""}`;
     const params = new URLSearchParams({ debug: mode, view_type: viewType });
     return `${origin}${path}?${params.toString()}`;
@@ -712,8 +734,8 @@ function getProductIdFromUrl(url) {
 }
 
 async function openModelInTab(tabId, { origin, model, mode = "1", lang = "", cids = "", recordId = null }) {
-  const majorVersion = await getOdooMajorVersion(origin);
-  if (majorVersion >= 19 && cids) {
+  const router = await usesOdooRouter(origin);
+  if (router && cids) {
     try { await setOdoo19Companies(origin, cids); }
     catch (error) { console.warn("OdooDevTools: no se pudo aplicar la empresa", error); }
   }
@@ -727,18 +749,7 @@ async function openModelInTab(tabId, { origin, model, mode = "1", lang = "", cid
     return response.json();
   };
 
-  const createData = await rpc({
-    model: "ir.actions.act_window",
-    method: "create",
-    args: [{
-      name: model,
-      res_model: model,
-      view_mode: recordId ? "form" : (majorVersion >= 19 ? "list,form" : "tree,form"),
-      target: "current",
-      domain: "[]",
-    }],
-    kwargs: { context: {} }
-  });
+  const createData = await createTempAction(rpc, { model, recordId, router });
 
   if (createData.error || !createData.result) {
     throw new Error(createData.error?.data?.message || "sin permisos");
@@ -748,7 +759,7 @@ async function openModelInTab(tabId, { origin, model, mode = "1", lang = "", cid
   const url = buildActionUrl(origin, actionId, {
     mode, lang, cids, recordId,
     viewType: recordId ? "form" : "list",
-    majorVersion,
+    router,
   });
 
   chrome.tabs.update(tabId, { url });
@@ -875,24 +886,13 @@ async function openModel() {
   }
 
   try {
-    const majorVersion = await getOdooMajorVersion(origin);
-    if (majorVersion >= 19 && cids) {
+    const router = await usesOdooRouter(origin);
+    if (router && cids) {
       try { await setOdoo19Companies(origin, cids); }
       catch (error) { console.warn("OdooDevTools: no se pudo aplicar la empresa", error); }
     }
     // 1. Crear el action exactamente igual que el server action Python
-    const createData = await rpc({
-      model:  "ir.actions.act_window",
-      method: "create",
-      args: [{
-        name:      model,
-        res_model: model,
-        view_mode: majorVersion >= 19 ? "list,form" : "tree,form",
-        target:    "current",
-        domain:    "[]",
-      }],
-      kwargs: { context: {} }
-    });
+    const createData = await createTempAction(rpc, { model, router });
 
     if (createData.error || !createData.result) {
       showModelError("Error al crear la acción: " + (createData.error?.data?.message || "sin permisos"));
@@ -907,7 +907,7 @@ async function openModel() {
       lang,
       cids,
       viewType: "list",
-      majorVersion,
+      router,
     });
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
