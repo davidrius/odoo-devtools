@@ -107,6 +107,10 @@ function isBackendPath(pathname) {
          pathname === "/odoo" || pathname.startsWith("/odoo/");
 }
 
+function isNewRouter(pathname) {
+  return pathname === "/odoo" || pathname.startsWith("/odoo/");
+}
+
 function alreadyUpToDate(url, entry) {
   try {
     const searchParams = new URL(url).searchParams;
@@ -116,7 +120,13 @@ function alreadyUpToDate(url, entry) {
     // En Odoo 19 la empresa activa está en la cookie "cids", no en la URL.
     const cidsOk  = isOdoo19 || !entry.cid || hashParams["cids"] === String(entry.cid);
     const u = new URL(url);
-    const langOk = !(isBackendPath(u.pathname) && searchParams.has("lang"));
+    // Odoo 18+ (/odoo): el idioma va por RPC, nunca por URL.
+    // Odoo ≤17 (/web): ?lang= como siempre; sin idioma elegido no debe quedar ninguno.
+    const langOk = isNewRouter(u.pathname)
+      ? !searchParams.has("lang")
+      : entry.lang
+        ? searchParams.get("lang") === entry.lang
+        : !(isBackendPath(u.pathname) && searchParams.has("lang"));
     return debugOk && langOk && cidsOk;
   } catch { return false; }
 }
@@ -125,7 +135,8 @@ function buildDebugUrl(url, entry) {
   let result = url;
   const u = new URL(result);
   u.searchParams.set("debug", entry.mode || "1");
-  if (isBackendPath(u.pathname)) u.searchParams.delete("lang");
+  if (!isNewRouter(u.pathname) && entry.lang) u.searchParams.set("lang", entry.lang);
+  else if (isBackendPath(u.pathname))          u.searchParams.delete("lang");
   result = u.toString();
   if (entry.cid && !(u.pathname === "/odoo" || u.pathname.startsWith("/odoo/"))) {
     result = setHashParam(result, "cids", String(entry.cid));

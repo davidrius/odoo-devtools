@@ -40,6 +40,11 @@ function deleteHashParam(url, key) {
   } catch { return url; }
 }
 
+/* /odoo/... = router nuevo (Odoo 18+); /web... = Odoo ≤17 */
+function isNewRouterPath(pathname) {
+  return pathname === "/odoo" || pathname.startsWith("/odoo/");
+}
+
 function isFirefox() {
   return typeof browser !== 'undefined' && navigator.userAgent.includes('Firefox');
 }
@@ -89,7 +94,6 @@ function buildActionUrl(origin, actionId, { mode = "1", lang = "", cids = "", re
   if (majorVersion >= 19) {
     const path = `/odoo/action-${actionId}${recordId ? `/${recordId}` : ""}`;
     const params = new URLSearchParams({ debug: mode, view_type: viewType });
-    if (lang) params.set("lang", lang);
     return `${origin}${path}?${params.toString()}`;
   }
 
@@ -516,10 +520,15 @@ function syncActiveTab(entry) {
     try { parsed = new URL(tab.url); } catch { return; }
     if (!domainMatches(entry, parsed)) return;
 
+    const legacy  = !isNewRouterPath(parsed.pathname);
+    const lang    = legacy ? (entry.lang || "") : "";
     const debugOk = parsed.searchParams.get("debug") === mode;
-    if (debugOk) return;
+    const langOk  = (parsed.searchParams.get("lang") || "") === lang;
+    if (debugOk && langOk) return;
 
     parsed.searchParams.set("debug", mode);
+    if (lang) parsed.searchParams.set("lang", lang);
+    else      parsed.searchParams.delete("lang");
     chrome.tabs.update(tab.id, { url: parsed.toString() });
   });
 }
@@ -567,7 +576,16 @@ async function switchLangOnTab(entry, newLang) {
   try { parsed = new URL(tab.url); } catch { return; }
   if (!domainMatches(entry, parsed)) return;
 
-  // Siempre se limpia ?lang= de la URL (puede venir de un intento anterior inválido)
+  // Odoo ≤17: idioma por ?lang= en la URL, como siempre. "" = idioma del usuario.
+  if (!isNewRouterPath(parsed.pathname)) {
+    parsed.searchParams.set("debug", entry.mode || "1");
+    if (newLang) parsed.searchParams.set("lang", newLang);
+    else         parsed.searchParams.delete("lang");
+    chrome.tabs.update(tab.id, { url: parsed.toString() });
+    return;
+  }
+
+  // Odoo 18+: ?lang= no sirve; se cambia por RPC. Siempre se limpia ?lang= de la URL (puede venir de un intento anterior inválido)
   const navigate = () => {
     parsed.searchParams.set("debug", entry.mode || "1");
     parsed.searchParams.delete("lang");
@@ -728,7 +746,7 @@ async function openModelInTab(tabId, { origin, model, mode = "1", lang = "", cid
 
   const actionId = createData.result;
   const url = buildActionUrl(origin, actionId, {
-    mode, cids, recordId,
+    mode, lang, cids, recordId,
     viewType: recordId ? "form" : "list",
     majorVersion,
   });
