@@ -81,7 +81,7 @@ function matchEntry(url, entries) {
     return entries.find((e) => {
       const clean = e.domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
       if (clean.includes(":")) return host === clean;
-      return hostname === clean || hostname.endsWith("." + clean);
+      return hostname === clean;
     }) || null;
   } catch { return null; }
 }

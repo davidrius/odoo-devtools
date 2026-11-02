@@ -442,7 +442,7 @@ function clearError()  { errorMsg.textContent = ""; }
 function domainMatches(entry, parsedUrl) {
   const clean = entry.domain.replace(/^https?:\/\//, "").replace(/\/$/, "");
   if (clean.includes(":")) return parsedUrl.host === clean;
-  return parsedUrl.hostname === clean || parsedUrl.hostname.endsWith("." + clean);
+  return parsedUrl.hostname === clean;
 }
 
 /* ══════════════════════════════════════
